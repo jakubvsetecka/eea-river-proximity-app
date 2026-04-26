@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <style>
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    FRUTIGER AERO / AQUA — glossy glass, blue skies, droplets, sheen
@@ -326,6 +327,28 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 0 0 1px rgba(255,255,255,0.85), 0 2px 4px rgba(10,55,83,0.2);
 }
 
+.map-loading {
+  position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+  z-index: 1000;
+  padding: 8px 14px 8px 12px;
+  display: none; align-items: center; gap: 10px;
+  font-size: 12px; font-weight: 700; color: var(--aqua-4);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.7);
+}
+.map-loading.on { display: flex; }
+.map-loading-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(110, 198, 255, 0.3);
+  border-top-color: var(--aqua-3);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.map-loading-count {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600; color: var(--ink-2);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* RAIL (Sidebar) */
 .rail {
   border-radius: 16px;
@@ -539,7 +562,41 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
 .marker-pin.sev-3 { background: linear-gradient(180deg, #ffc070 0%, var(--sev-3) 100%); }
 .marker-pin.sev-4 { background: linear-gradient(180deg, #ff9080 0%, var(--sev-4) 100%); }
 .marker-pin.sev-5 { background: linear-gradient(180deg, #ff6070 0%, var(--sev-5) 100%); animation: critPulse 1.5s infinite; }
+.marker-pin.no-data {
+  background: linear-gradient(180deg, #cfd6dd 0%, #7a8794 100%);
+  opacity: 0.55;
+  border-color: rgba(255,255,255,0.7);
+}
 @keyframes critPulse { 0%,100% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 0 0 3px rgba(211,29,44,0.4); } 50% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 0 0 6px rgba(211,29,44,0.15); } }
+
+.fac.no-data { opacity: 0.55; filter: saturate(0.4); }
+.fac.no-data:hover { opacity: 0.85; }
+
+/* Cluster bubbles */
+.cluster-bubble-wrap { background: none !important; border: none !important; }
+.cluster-bubble {
+  width: 100%; height: 100%;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(circle at 30% 25%, #fff 0%, rgba(255,255,255,0) 38%),
+    radial-gradient(circle at 70% 80%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 35%),
+    radial-gradient(circle at 50% 50%, #6ec6ff 0%, #1e8fd5 60%, #095a8c 100%);
+  border: 2px solid rgba(255,255,255,0.95);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,0.7),
+    inset 0 -2px 6px rgba(9, 90, 140, 0.4),
+    0 4px 14px rgba(10, 55, 83, 0.35);
+  color: #fff;
+  font-family: 'Nunito', system-ui;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(0, 30, 60, 0.55);
+  transition: transform 0.15s ease;
+}
+.cluster-bubble:hover { transform: scale(1.08); }
+.cluster-bubble.sm { font-size: 13px; }
+.cluster-bubble.md { font-size: 15px; }
+.cluster-bubble.lg { font-size: 17px; }
 </style>
 </head>
 <body>
@@ -633,6 +690,16 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
             <div class="map-legend-dot" style="background: var(--sev-5)"></div>
             <span>Critical</span>
           </div>
+          <div class="map-legend-row">
+            <div class="map-legend-dot" style="background: linear-gradient(180deg,#cfd6dd 0%,#7a8794 100%); opacity: 0.55"></div>
+            <span>No water data</span>
+          </div>
+        </div>
+
+        <div class="map-loading glass" id="map-loading">
+          <div class="map-loading-spinner"></div>
+          <span id="map-loading-text">Loading…</span>
+          <span class="map-loading-count" id="map-loading-count"></span>
         </div>
       </div>
     </div>
@@ -802,6 +869,7 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-ant-path@1.3.0/dist/leaflet-ant-path.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script type="module">
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/+esm';
 
@@ -819,8 +887,23 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
 }).addTo(map);
 
-const facilitiesLayer = L.layerGroup().addTo(map);
-const geometryLayer   = L.layerGroup().addTo(map);
+const facilitiesLayer = L.markerClusterGroup({
+  maxClusterRadius: 60,
+  showCoverageOnHover: false,
+  spiderfyOnMaxZoom: true,
+  zoomToBoundsOnClick: true,
+  iconCreateFunction: cluster => {
+    const count = cluster.getChildCount();
+    const size  = count < 10 ? 36 : count < 100 ? 44 : 54;
+    const cls   = count < 10 ? 'sm' : count < 100 ? 'md' : 'lg';
+    return L.divIcon({
+      className: 'cluster-bubble-wrap',
+      html: `<div class="cluster-bubble ${cls}">${count}</div>`,
+      iconSize: [size, size]
+    });
+  }
+}).addTo(map);
+const geometryLayer = L.layerGroup().addTo(map);
 
 let detailMap = null;
 const detailGeometryLayer = L.layerGroup();
@@ -829,8 +912,16 @@ let allFacilities    = [];
 let selectedFacilityId = null;
 
 // ── DuckDB init ──────────────────────────────────────────────────────────────
-document.getElementById('fac-list').innerHTML =
-  '<div style="text-align:center;color:var(--ink-3);padding:20px;">Loading DuckDB…</div>';
+function bootStatus(msg) {
+  document.getElementById('map-loading').classList.add('on');
+  document.getElementById('map-loading-text').textContent = msg;
+  document.getElementById('map-loading-count').textContent = '';
+  document.getElementById('fac-list').innerHTML =
+    `<div style="text-align:center;color:var(--ink-3);padding:20px;">${msg}</div>`;
+}
+
+bootStatus('Loading DuckDB…');
+await new Promise(requestAnimationFrame);
 
 const bundles  = duckdb.getJsDelivrBundles();
 const bundle   = await duckdb.selectBundle(bundles);
@@ -844,12 +935,12 @@ URL.revokeObjectURL(workerUrl);
 
 const conn = await db.connect();
 
-document.getElementById('fac-list').innerHTML =
-  '<div style="text-align:center;color:var(--ink-3);padding:20px;">Installing spatial extension…</div>';
+bootStatus('Installing spatial extension…');
+await new Promise(requestAnimationFrame);
 await conn.query('INSTALL spatial; LOAD spatial;');
 
-document.getElementById('fac-list').innerHTML =
-  '<div style="text-align:center;color:var(--ink-3);padding:20px;">Fetching dataset from HuggingFace…</div>';
+bootStatus('Connecting to HuggingFace…');
+await new Promise(requestAnimationFrame);
 await conn.query(`CREATE VIEW facilities AS SELECT * FROM read_parquet('${HF_FACILITIES}')`);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -865,26 +956,17 @@ function getSeverityColor(sev) {
            4:'var(--sev-4)', 5:'var(--sev-5)' }[sev] || 'var(--sev-1)';
 }
 
-function createMarkerIcon(severity) {
+function createMarkerIcon(severity, noData = false) {
+  const cls = noData ? 'no-data' : `sev-${severity}`;
   return L.divIcon({
     className: 'facility-marker',
-    html: `<div class="marker-pin sev-${severity}"></div>`,
+    html: `<div class="marker-pin ${cls}"></div>`,
     iconSize: [24, 24], iconAnchor: [12, 12]
   });
 }
 
 function parseGeoJSON(str) {
   try { return str ? JSON.parse(str) : null; } catch { return null; }
-}
-
-function deduplicateFacilities(facilities) {
-  const seen = new Map();
-  return facilities.filter(f => {
-    const key = `${f.facilityName}|${(f.latitude ?? 0).toFixed(4)}|${(f.longitude ?? 0).toFixed(4)}`;
-    if (seen.has(key)) return false;
-    seen.set(key, true);
-    return true;
-  });
 }
 
 function addFlowLine(geojson, color, layer) {
@@ -922,7 +1004,61 @@ window.clearSearch = function () {
   loadFacilities(false);
 };
 
+function buildFacilityMarker(f) {
+  if (f.latitude == null || f.longitude == null) return null;
+  const noData = !f.has_sentinel_visible_river;
+  const sev    = getSeverity(f);
+  const marker = L.marker([f.latitude, f.longitude], { icon: createMarkerIcon(sev, noData) });
+  const status = noData ? 'No water data' : ['Normal','Elevated','Warning','Alert','Critical'][sev-1];
+  const dotCol = noData ? '#7a8794' : getSeverityColor(sev);
+  marker.bindTooltip(`
+    <strong>${f.facilityName}</strong><br>
+    ${f.city || ''}, ${f.countryName || ''}<br>
+    <span style="color:${dotCol}">● ${status}</span>
+  `, { direction: 'top', offset: [0, -10] });
+  marker.on('click', () => window.selectFacility(f.id));
+  return marker;
+}
+
+function renderFacilityList() {
+  const sorted  = [...allFacilities].sort((a, b) => getSeverity(b) - getSeverity(a));
+  const facList = document.getElementById('fac-list');
+
+  if (sorted.length === 0) {
+    facList.innerHTML = '<div style="text-align:center;color:var(--ink-3);padding:20px;">No facilities found. Try a different search or zoom level.</div>';
+    return;
+  }
+  facList.innerHTML = sorted.slice(0, 30).map(f => {
+    const sev    = getSeverity(f);
+    const noData = !f.has_sentinel_visible_river;
+    const dotCol = noData ? '#7a8794' : getSeverityColor(sev);
+    const cls    = `${noData ? 'no-data ' : ''}${selectedFacilityId === f.id ? 'sel' : ''}`.trim();
+    return `
+      <div class="fac ${cls}" onclick="window.selectFacility(${f.id})">
+        <div class="fac-sev" style="background:${dotCol};color:${dotCol}"></div>
+        <div class="fac-main">
+          <div class="fac-top"><span class="fac-name">${f.facilityName || '—'}</span></div>
+          <div class="fac-meta">${f.city || 'Unknown'}, ${f.countryName || 'Unknown'}</div>
+          <div class="fac-bot">
+            <span class="fac-stat"><b>${f.n_upstream || 0}</b> upstream</span>
+            <span class="fac-stat"><b>${f.n_downstream || 0}</b> downstream</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function setLoading(on, message = 'Loading…', count = null) {
+  document.getElementById('map-loading').classList.toggle('on', on);
+  document.getElementById('map-loading-text').textContent = message;
+  document.getElementById('map-loading-count').textContent = count != null ? count.toLocaleString() : '';
+}
+
+let activeQueryId = 0;
+
 async function loadFacilities(panToResults = false) {
+  const queryId = ++activeQueryId;
+
   const bounds     = map.getBounds();
   const searchTerm = document.getElementById('search').value.trim();
   const searchChip = document.getElementById('search-chip');
@@ -948,9 +1084,13 @@ async function loadFacilities(panToResults = false) {
     facTitle.textContent = 'Facilities in View';
   }
 
-  const res = await conn.query(`
+  setLoading(true, 'Streaming facilities', 0);
+  await new Promise(requestAnimationFrame);
+
+  const reader = await conn.send(`
     SELECT facilityName, city, countryName, EPRTR_SectorName,
            n_upstream, n_downstream, closest_river_id, distance_to_river_m,
+           has_sentinel_visible_river,
            ST_X(geometry) AS longitude,
            ST_Y(geometry) AS latitude
     FROM facilities
@@ -958,53 +1098,53 @@ async function loadFacilities(panToResults = false) {
     LIMIT 500
   `);
 
-  const rows   = res.toArray().map(r => r.toJSON());
-  const unique = deduplicateFacilities(rows);
-  allFacilities = unique.map((f, i) => ({ ...f, id: i }));
+  const seen          = new Map();
+  const newFacilities = [];
+  const markerBounds  = L.latLngBounds();
+  let firstBatch      = true;
 
-  facilitiesLayer.clearLayers();
-  document.getElementById('fac-count').textContent = allFacilities.length;
+  try {
+    for await (const batch of reader) {
+      if (queryId !== activeQueryId) return;
 
-  const sorted  = [...allFacilities].sort((a, b) => getSeverity(b) - getSeverity(a));
-  const facList = document.getElementById('fac-list');
+      if (firstBatch) {
+        facilitiesLayer.clearLayers();
+        firstBatch = false;
+      }
 
-  if (sorted.length === 0) {
-    facList.innerHTML = '<div style="text-align:center;color:var(--ink-3);padding:20px;">No facilities found. Try a different search or zoom level.</div>';
-  } else {
-    facList.innerHTML = sorted.slice(0, 30).map(f => {
-      const sev = getSeverity(f);
-      return `
-        <div class="fac ${selectedFacilityId === f.id ? 'sel' : ''}" onclick="window.selectFacility(${f.id})">
-          <div class="fac-sev" style="background:${getSeverityColor(sev)};color:${getSeverityColor(sev)}"></div>
-          <div class="fac-main">
-            <div class="fac-top"><span class="fac-name">${f.facilityName || '—'}</span></div>
-            <div class="fac-meta">${f.city || 'Unknown'}, ${f.countryName || 'Unknown'}</div>
-            <div class="fac-bot">
-              <span class="fac-stat"><b>${f.n_upstream || 0}</b> upstream</span>
-              <span class="fac-stat"><b>${f.n_downstream || 0}</b> downstream</span>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-  }
+      const rows = batch.toArray().map(r => r.toJSON());
+      const batchMarkers = [];
+      for (const row of rows) {
+        const key = `${row.facilityName}|${(row.latitude ?? 0).toFixed(4)}|${(row.longitude ?? 0).toFixed(4)}`;
+        if (seen.has(key)) continue;
+        seen.set(key, true);
 
-  const markerBounds = L.latLngBounds();
-  allFacilities.forEach(f => {
-    if (f.latitude == null || f.longitude == null) return;
-    const sev    = getSeverity(f);
-    const marker = L.marker([f.latitude, f.longitude], { icon: createMarkerIcon(sev) });
-    marker.bindTooltip(`
-      <strong>${f.facilityName}</strong><br>
-      ${f.city || ''}, ${f.countryName || ''}<br>
-      <span style="color:${getSeverityColor(sev)}">● ${['Normal','Elevated','Warning','Alert','Critical'][sev-1]}</span>
-    `, { direction: 'top', offset: [0, -10] });
-    marker.on('click', () => window.selectFacility(f.id));
-    facilitiesLayer.addLayer(marker);
-    markerBounds.extend([f.latitude, f.longitude]);
-  });
+        const f = { ...row, id: newFacilities.length };
+        newFacilities.push(f);
+        const marker = buildFacilityMarker(f);
+        if (marker) {
+          batchMarkers.push(marker);
+          markerBounds.extend([f.latitude, f.longitude]);
+        }
+      }
+      if (batchMarkers.length) facilitiesLayer.addLayers(batchMarkers);
 
-  if (panToResults && allFacilities.length > 0 && markerBounds.isValid()) {
-    map.fitBounds(markerBounds, { padding: [50, 50], maxZoom: 12 });
+      document.getElementById('fac-count').textContent = newFacilities.length;
+      setLoading(true, 'Streaming facilities', newFacilities.length);
+      await new Promise(requestAnimationFrame);
+    }
+
+    if (queryId !== activeQueryId) return;
+    if (firstBatch) facilitiesLayer.clearLayers();
+
+    allFacilities = newFacilities;
+    renderFacilityList();
+
+    if (panToResults && newFacilities.length > 0 && markerBounds.isValid()) {
+      map.fitBounds(markerBounds, { padding: [50, 50], maxZoom: 12 });
+    }
+  } finally {
+    if (queryId === activeQueryId) setLoading(false);
   }
 }
 
@@ -1092,7 +1232,7 @@ document.getElementById('search').addEventListener('keypress', e => {
   if (e.key === 'Enter') loadFacilities(true);
 });
 
-map.on('moveend', () => { if (map.getZoom() >= 7) loadFacilities(); });
+map.on('moveend', () => loadFacilities());
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 await loadStats();
