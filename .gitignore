@@ -22,3 +22,5 @@ Thumbs.db
 # Project specific
 *.html
 !frontend/index.html
+
+.claude
