@@ -802,7 +802,6 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
           <input type="range" id="timeline-slider" min="0" max="100" value="0" step="1" />
           <div class="timeline-ticks" id="timeline-ticks"></div>
         </div>
-        <div class="timeline-active" id="timeline-active">No anomalies</div>
       </div>
       <div class="map-shell">
         <div class="map-container">
@@ -859,8 +858,8 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
             <div class="kpi-lbl">Monitored Facilities</div>
           </div>
           <div class="kpi-cell">
-            <div class="kpi-num alert" id="kpi-alerts">—</div>
-            <div class="kpi-lbl">Active Alerts</div>
+            <div class="kpi-num" id="kpi-alerts">—</div>
+            <div class="kpi-lbl">Active Anomalies</div>
           </div>
           <div class="kpi-cell">
             <div class="kpi-num" id="kpi-rivers">—</div>
@@ -900,38 +899,7 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
               Recent Alerts
             </div>
           </div>
-          <div class="alert-list" id="alert-list">
-            <div class="alert-row">
-              <div class="alert-bar" style="background:var(--sev-4);color:var(--sev-4)"></div>
-              <div>
-                <div class="alert-top">
-                  <span class="alert-kind">Turbidity Spike</span>
-                  <span class="alert-time mono">2h ago</span>
-                </div>
-                <div class="alert-msg">Detected near chemical facility in Germany</div>
-              </div>
-            </div>
-            <div class="alert-row">
-              <div class="alert-bar" style="background:var(--sev-3);color:var(--sev-3)"></div>
-              <div>
-                <div class="alert-top">
-                  <span class="alert-kind">NDWI Anomaly</span>
-                  <span class="alert-time mono">5h ago</span>
-                </div>
-                <div class="alert-msg">Downstream change near steel plant in Poland</div>
-              </div>
-            </div>
-            <div class="alert-row">
-              <div class="alert-bar" style="background:var(--sev-2);color:var(--sev-2)"></div>
-              <div>
-                <div class="alert-top">
-                  <span class="alert-kind">Temperature Rise</span>
-                  <span class="alert-time mono">1d ago</span>
-                </div>
-                <div class="alert-msg">Thermal discharge detected in France</div>
-              </div>
-            </div>
-          </div>
+          <div class="alert-list" id="alert-list"></div>
         </div>
       </div>
     </aside>
@@ -1089,11 +1057,20 @@ bootStatus('Installing spatial extension…');
 await new Promise(requestAnimationFrame);
 await conn.query('INSTALL spatial; LOAD spatial;');
 
-bootStatus('Connecting to HuggingFace…');
+bootStatus('Reading facilities schema…');
 await new Promise(requestAnimationFrame);
-await conn.query(`CREATE VIEW facilities    AS SELECT * FROM read_parquet('${HF_FACILITIES}')`);
-await conn.query(`CREATE VIEW events        AS SELECT * FROM read_parquet('${HF_EVENTS}')`);
-await conn.query(`CREATE VIEW bins          AS SELECT * FROM read_parquet('${HF_BINS}')`);
+await conn.query(`CREATE VIEW facilities AS SELECT * FROM read_parquet('${HF_FACILITIES}')`);
+
+bootStatus('Reading anomaly events schema…');
+await new Promise(requestAnimationFrame);
+await conn.query(`CREATE VIEW events AS SELECT * FROM read_parquet('${HF_EVENTS}')`);
+
+bootStatus('Reading bin-level schema…');
+await new Promise(requestAnimationFrame);
+await conn.query(`CREATE VIEW bins AS SELECT * FROM read_parquet('${HF_BINS}')`);
+
+bootStatus('Reading canonical map schema…');
+await new Promise(requestAnimationFrame);
 await conn.query(`CREATE VIEW canonical_map AS SELECT * FROM read_parquet('${HF_CANONICAL}')`);
 
 bootStatus('Loading anomaly events…');
@@ -1196,14 +1173,16 @@ function addFlowLine(geojson, color, layer) {
 // ── Stats ────────────────────────────────────────────────────────────────────
 async function loadStats() {
   const res = await conn.query(`
-    SELECT COUNT(*) AS total, COUNT(DISTINCT countryName) AS n_countries
-    FROM facilities
+    SELECT COUNT(DISTINCT m.canonical_facility_id) AS monitored,
+           COUNT(DISTINCT f.countryName)           AS n_countries
+    FROM facilities f
+    JOIN canonical_map m ON f.facility_idx = m.facility_idx
+    WHERE f.has_sentinel_visible_river
   `);
   const [row] = res.toArray().map(r => r.toJSON());
-  document.getElementById('kpi-facilities').textContent = Number(row.total).toLocaleString();
+  document.getElementById('kpi-facilities').textContent = Number(row.monitored).toLocaleString();
   document.getElementById('kpi-countries').textContent  = row.n_countries;
   document.getElementById('kpi-rivers').textContent     = '—';
-  document.getElementById('kpi-alerts').textContent     = '12';
 }
 
 // ── Facilities list ───────────────────────────────────────────────────────────
@@ -1481,8 +1460,64 @@ function setCurrentMs(ms, syncSlider = true) {
     document.getElementById('timeline-slider').value = Math.round((currentMs - TIMELINE_MIN_MS) / DAY_MS);
   }
   updateAnomalyHighlights();
+  updateKpiAlerts();
+  renderRecentAlerts();
   if (selectedFacilityBins) renderDeltaCharts();
   if (allFacilities.length > 0) renderFacilityList();
+}
+
+function updateKpiAlerts() {
+  const n  = allEvents.filter(e => e.start_ms <= currentMs && currentMs <= e.end_ms).length;
+  const el = document.getElementById('kpi-alerts');
+  el.textContent = n;
+  el.classList.toggle('alert', n > 0);
+}
+
+function eventKindLabel(signalType) {
+  return signalType === 'ndci' ? 'NDCI Anomaly'
+       : signalType === 'turb' ? 'Turbidity Spike'
+       : 'NDCI + Turbidity';
+}
+
+function timeAgo(deltaMs) {
+  if (deltaMs <= 0) return 'today';
+  const days = Math.floor(deltaMs / DAY_MS);
+  if (days === 0)   return 'today';
+  if (days < 7)     return `${days}d ago`;
+  if (days < 60)    return `${Math.floor(days / 7)}w ago`;
+  if (days < 730)   return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+function renderRecentAlerts() {
+  const list = document.getElementById('alert-list');
+  if (!allEvents.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--ink-3);padding:18px;font-size:11px;">No anomalies in dataset.</div>';
+    return;
+  }
+  const past = allEvents.filter(e => e.start_ms <= currentMs).sort((a, b) => b.start_ms - a.start_ms);
+  if (!past.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--ink-3);padding:18px;font-size:11px;">No anomalies detected before this date.</div>';
+    return;
+  }
+  list.innerHTML = past.slice(0, 12).map(e => {
+    const z      = Math.max(Math.abs(e.peak_z_ndci || 0), Math.abs(e.peak_z_turb || 0));
+    const sev    = z >= 5 ? 5 : z >= 4 ? 4 : z >= 3 ? 3 : 2;
+    const c      = `var(--sev-${sev})`;
+    const active = e.start_ms <= currentMs && currentMs <= e.end_ms;
+    const time   = active ? 'active now' : timeAgo(currentMs - e.start_ms);
+    return `
+      <div class="alert-row">
+        <div class="alert-bar" style="background:${c};color:${c}"></div>
+        <div>
+          <div class="alert-top">
+            <span class="alert-kind">${eventKindLabel(e.signal_type)} <span class="mono" style="color:${c};font-weight:700">|z|=${z.toFixed(1)}</span></span>
+            <span class="alert-time mono">${time}</span>
+          </div>
+          <div class="alert-msg">${e.facilityName} • ${e.countryName || ''}</div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function togglePlay() {
@@ -1503,16 +1538,6 @@ function togglePlay() {
 function updateAnomalyHighlights() {
   anomalyLayer.clearLayers();
   const active = allEvents.filter(e => e.start_ms <= currentMs && currentMs <= e.end_ms);
-
-  const indicator = document.getElementById('timeline-active');
-  if (active.length === 0) {
-    indicator.textContent = 'No anomalies';
-    indicator.classList.remove('has-anomaly');
-  } else {
-    indicator.textContent = `${active.length} active anomal${active.length === 1 ? 'y' : 'ies'}`;
-    indicator.classList.add('has-anomaly');
-  }
-
   active.forEach(e => {
     const icon = L.divIcon({
       className: 'anomaly-marker',
@@ -1675,7 +1700,6 @@ map.on('moveend', () => loadFacilities());
 initTimeline();
 await loadStats();
 await loadFacilities();
-document.getElementById('kpi-alerts').textContent = allEvents.length;
 </script>
 </body>
 </html>
