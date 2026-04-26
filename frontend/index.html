@@ -572,6 +572,142 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
 .fac.no-data { opacity: 0.55; filter: saturate(0.4); }
 .fac.no-data:hover { opacity: 0.85; }
 
+/* Timeline */
+.timeline {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 16px; height: 56px;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+.timeline-play {
+  width: 36px; height: 36px; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(220, 240, 255, 0.85) 50%, rgba(160, 215, 250, 0.85) 50.1%, rgba(110, 198, 255, 0.95) 100%);
+  border: 1px solid rgba(255,255,255,0.95);
+  color: var(--aqua-4); font-size: 14px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 -1px 0 rgba(30,143,213,0.4) inset, 0 2px 5px rgba(10,55,83,0.18);
+  flex-shrink: 0;
+}
+.timeline-play:hover { transform: translateY(-1px); }
+.timeline-current {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px; font-weight: 700; color: var(--aqua-4);
+  min-width: 92px;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.7);
+}
+.timeline-track { flex: 1; position: relative; height: 28px; }
+.timeline-track input[type="range"] {
+  position: absolute; inset: 0;
+  width: 100%; margin: 0; padding: 0;
+  -webkit-appearance: none; appearance: none;
+  background: transparent; outline: none;
+  z-index: 2;
+}
+.timeline-track input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(110, 198, 255, 0.25), rgba(30, 143, 213, 0.4));
+  border: 1px solid rgba(255,255,255,0.6);
+}
+.timeline-track input[type="range"]::-moz-range-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(110, 198, 255, 0.25), rgba(30, 143, 213, 0.4));
+}
+.timeline-track input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; border-radius: 999px;
+  margin-top: -7px;
+  background: radial-gradient(circle at 30% 25%, #fff 0%, rgba(255,255,255,0) 35%), radial-gradient(circle at 50% 50%, #6ec6ff 0%, #1e8fd5 60%, #095a8c 100%);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(10,55,83,0.35);
+  cursor: pointer;
+}
+.timeline-track input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 999px;
+  background: radial-gradient(circle at 30% 25%, #fff 0%, rgba(255,255,255,0) 35%), radial-gradient(circle at 50% 50%, #6ec6ff 0%, #1e8fd5 60%, #095a8c 100%);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(10,55,83,0.35);
+  cursor: pointer;
+}
+.timeline-ticks {
+  position: absolute; left: 0; right: 0; top: 50%; height: 14px; transform: translateY(-50%);
+  pointer-events: none; z-index: 1;
+}
+.timeline-tick {
+  position: absolute; top: 0; width: 4px; height: 14px;
+  background: var(--sev-4);
+  border-radius: 2px;
+  box-shadow: 0 0 6px var(--sev-4);
+  opacity: 0.85;
+  transform: translateX(-50%);
+}
+.timeline-active {
+  font-size: 11px; font-weight: 700; color: var(--ink-3);
+  padding: 6px 10px; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.4));
+  border: 1px solid rgba(255,255,255,0.85);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.timeline-active.has-anomaly { color: #fff; background: linear-gradient(180deg, #ff8a6c 0%, #d31d2c 100%); border-color: rgba(255,255,255,0.7); }
+
+/* Anomaly markers (separate layer, on top of facility cluster) */
+.anomaly-marker { background: none !important; border: none !important; }
+.anomaly-ring {
+  width: 100%; height: 100%; border-radius: 999px;
+  background: radial-gradient(circle at 50% 50%, rgba(238,90,58,0.2) 0%, rgba(238,90,58,0) 60%);
+  position: relative;
+}
+.anomaly-ring::after {
+  content: ''; position: absolute;
+  top: 50%; left: 50%;
+  width: 16px; height: 16px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 25%, #fff 0%, rgba(255,255,255,0) 30%), radial-gradient(circle at 50% 50%, #ff8a6c 0%, #d31d2c 100%);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 0 rgba(211,29,44,0.6), 0 2px 6px rgba(0,0,0,0.3);
+  transform: translate(-50%, -50%);
+  animation: anomalyPulse 1.6s infinite;
+}
+@keyframes anomalyPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(211,29,44,0.55), 0 2px 6px rgba(0,0,0,0.3); }
+  70%  { box-shadow: 0 0 0 18px rgba(211,29,44,0), 0 2px 6px rgba(0,0,0,0.3); }
+  100% { box-shadow: 0 0 0 0 rgba(211,29,44,0), 0 2px 6px rgba(0,0,0,0.3); }
+}
+.leaflet-tooltip.anomaly-tooltip {
+  background: linear-gradient(180deg, rgba(255,255,255,0.97), rgba(255, 235, 230, 0.92));
+  border: 1px solid var(--sev-4);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 11px; font-weight: 700; color: var(--ink);
+  box-shadow: 0 4px 12px rgba(10,55,83,0.25);
+}
+.leaflet-tooltip.anomaly-tooltip:before { display: none; }
+
+/* Delta histogram */
+.delta-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.45));
+  border: 1px solid rgba(255,255,255,0.95);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.95);
+}
+.delta-card-hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.delta-card-ttl { font-size: 11px; font-weight: 800; color: var(--aqua-4); text-transform: uppercase; letter-spacing: 0.06em; }
+.delta-card-z {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(110, 198, 255, 0.18); color: var(--aqua-4);
+}
+.delta-card-z.anomaly { background: linear-gradient(180deg, #ff8a6c, #d31d2c); color: #fff; }
+.delta-svg { width: 100%; height: 110px; display: block; }
+.delta-current {
+  margin-top: 6px;
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--ink-3); font-weight: 600;
+}
+.delta-current b { color: var(--ink); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
 /* Cluster bubbles */
 .cluster-bubble-wrap { background: none !important; border: none !important; }
 .cluster-bubble {
@@ -659,6 +795,15 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
   <main class="main">
     <!-- MAP -->
     <div class="map-col">
+      <div class="timeline glass" id="timeline">
+        <button class="timeline-play" id="timeline-play" title="Play / pause">▶</button>
+        <div class="timeline-current" id="timeline-current">—</div>
+        <div class="timeline-track">
+          <input type="range" id="timeline-slider" min="0" max="100" value="0" step="1" />
+          <div class="timeline-ticks" id="timeline-ticks"></div>
+        </div>
+        <div class="timeline-active" id="timeline-active">No anomalies</div>
+      </div>
       <div class="map-shell">
         <div class="map-container">
           <div id="map"></div>
@@ -818,26 +963,26 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
         </div>
       </div>
       <div class="detail-info">
-        <div class="detail-metrics">
-          <div class="metric-card">
-            <div class="metric-lbl">Distance to River</div>
-            <div class="metric-val" id="detail-distance">—</div>
-            <div class="metric-unit">meters</div>
+        <div class="delta-card">
+          <div class="delta-card-hd">
+            <div class="delta-card-ttl">Δ NDCI distribution (downstream − upstream)</div>
+            <div class="delta-card-z" id="ndci-z">—</div>
           </div>
-          <div class="metric-card">
-            <div class="metric-lbl">River Discharge</div>
-            <div class="metric-val" id="detail-discharge">—</div>
-            <div class="metric-unit">m³/s</div>
+          <svg class="delta-svg" id="ndci-svg" preserveAspectRatio="none"></svg>
+          <div class="delta-current">
+            <span>Current Δ on <b id="ndci-date">—</b></span>
+            <span><b id="ndci-current">—</b></span>
           </div>
-          <div class="metric-card">
-            <div class="metric-lbl">Upstream Segments</div>
-            <div class="metric-val" id="detail-upstream">—</div>
-            <div class="metric-unit">river parts</div>
+        </div>
+        <div class="delta-card">
+          <div class="delta-card-hd">
+            <div class="delta-card-ttl">Δ Turbidity distribution (downstream − upstream)</div>
+            <div class="delta-card-z" id="turb-z">—</div>
           </div>
-          <div class="metric-card">
-            <div class="metric-lbl">Downstream Segments</div>
-            <div class="metric-val" id="detail-downstream">—</div>
-            <div class="metric-unit">affected</div>
+          <svg class="delta-svg" id="turb-svg" preserveAspectRatio="none"></svg>
+          <div class="delta-current">
+            <span>Current Δ on <b id="turb-date">—</b></span>
+            <span><b id="turb-current">—</b></span>
           </div>
         </div>
 
@@ -873,7 +1018,10 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
 <script type="module">
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/+esm';
 
-const HF_FACILITIES = 'https://huggingface.co/datasets/cassini-team-todo/eea-river-proximity/resolve/main/river_data_facilities.geoparquet';
+const HF_BASE       = 'https://huggingface.co/datasets/cassini-team-todo/eea-river-proximity/resolve/main';
+const HF_FACILITIES = `${HF_BASE}/river_data_facilities.geoparquet`;
+const HF_EVENTS     = `${HF_BASE}/facility_anomalies_events.parquet`;
+const HF_BINS       = `${HF_BASE}/facility_anomalies_per_bin.parquet`;
 
 const UPSTREAM_COLOR = '#2ca02c';
 const DOWNSTREAM_COLOR = '#d62728';
@@ -904,6 +1052,7 @@ const facilitiesLayer = L.markerClusterGroup({
   }
 }).addTo(map);
 const geometryLayer = L.layerGroup().addTo(map);
+const anomalyLayer  = L.layerGroup().addTo(map);
 
 let detailMap = null;
 const detailGeometryLayer = L.layerGroup();
@@ -942,6 +1091,53 @@ await conn.query('INSTALL spatial; LOAD spatial;');
 bootStatus('Connecting to HuggingFace…');
 await new Promise(requestAnimationFrame);
 await conn.query(`CREATE VIEW facilities AS SELECT * FROM read_parquet('${HF_FACILITIES}')`);
+await conn.query(`CREATE VIEW events     AS SELECT * FROM read_parquet('${HF_EVENTS}')`);
+await conn.query(`CREATE VIEW bins       AS SELECT * FROM read_parquet('${HF_BINS}')`);
+
+bootStatus('Loading anomaly events…');
+await new Promise(requestAnimationFrame);
+const eventsRes = await conn.query(`
+  SELECT e.event_id, e.facility_id,
+         epoch_ms(e.start_date) AS start_ms,
+         epoch_ms(e.end_date)   AS end_ms,
+         e.peak_z_ndci, e.peak_z_turb, e.signal_type,
+         f.facilityName, f.countryName, f.city,
+         ST_X(f.geometry) AS longitude,
+         ST_Y(f.geometry) AS latitude
+  FROM events e
+  JOIN facilities f ON e.facility_id = f.facility_idx
+  ORDER BY e.start_date
+`);
+const allEvents = eventsRes.toArray().map(r => {
+  const o = r.toJSON();
+  return {
+    ...o,
+    facility_id: Number(o.facility_id),
+    start_ms: Number(o.start_ms),
+    end_ms: Number(o.end_ms)
+  };
+});
+
+bootStatus('Indexing observed facilities…');
+await new Promise(requestAnimationFrame);
+// Same physical facility may appear under many facility_idx values (one per pollutant
+// declaration). The bins table only has data under one canonical idx per location.
+// Build (name|lat|lon) → canonical idx map so detail clicks resolve to the right idx.
+const obsRes = await conn.query(`
+  SELECT MIN(b.facility_id) AS canonical_idx,
+         f.facilityName,
+         ROUND(ST_X(f.geometry), 4) AS lon4,
+         ROUND(ST_Y(f.geometry), 4) AS lat4
+  FROM (SELECT DISTINCT facility_id FROM bins) b
+  JOIN facilities f ON b.facility_id = f.facility_idx
+  GROUP BY f.facilityName, lon4, lat4
+`);
+const facilityIdxByKey = new Map();
+for (const r of obsRes.toArray()) {
+  const o = r.toJSON();
+  const key = `${o.facilityName}|${Number(o.lat4).toFixed(4)}|${Number(o.lon4).toFixed(4)}`;
+  facilityIdxByKey.set(key, Number(o.canonical_idx));
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function getSeverity(f) {
@@ -1088,7 +1284,7 @@ async function loadFacilities(panToResults = false) {
   await new Promise(requestAnimationFrame);
 
   const reader = await conn.send(`
-    SELECT facilityName, city, countryName, EPRTR_SectorName,
+    SELECT facility_idx, facilityName, city, countryName, EPRTR_SectorName,
            n_upstream, n_downstream, closest_river_id, distance_to_river_m,
            has_sentinel_visible_river,
            ST_X(geometry) AS longitude,
@@ -1175,16 +1371,16 @@ window.selectFacility = async function (facilityId) {
   document.getElementById('detail-sub').textContent         = `${facility.city || 'Unknown'} • ${facility.countryName || 'Unknown'}`;
   document.getElementById('detail-status').style.background = getSeverityColor(sev);
   document.getElementById('detail-status').style.color      = getSeverityColor(sev);
-  document.getElementById('detail-distance').textContent    = facility.distance_to_river_m ? Math.round(facility.distance_to_river_m) : '—';
-  document.getElementById('detail-discharge').textContent   = facility.river_discharge ? Number(facility.river_discharge).toFixed(1) : '—';
-  document.getElementById('detail-upstream').textContent    = facility.n_upstream  || '0';
-  document.getElementById('detail-downstream').textContent  = facility.n_downstream || '0';
   document.getElementById('detail-sector').textContent      = facility.EPRTR_SectorName || '—';
   document.getElementById('detail-pollutant').textContent   = facility.Pollutant || '—';
   document.getElementById('detail-releases').textContent    = facility.Releases ? `${Number(facility.Releases).toLocaleString()} kg/yr` : '—';
   document.getElementById('detail-strahler').textContent    = facility.river_strahler || '—';
 
   document.getElementById('detail-overlay').classList.add('open');
+
+  const canonicalKey = `${facility.facilityName}|${(facility.latitude ?? 0).toFixed(4)}|${(facility.longitude ?? 0).toFixed(4)}`;
+  const canonicalIdx = facilityIdxByKey.get(canonicalKey) ?? Number(facility.facility_idx);
+  loadAndRenderDeltas(canonicalIdx).catch(err => console.warn('delta load failed', err));
 
   if (!detailMap) {
     detailMap = L.map('detail-map', { zoomControl: false }).setView([facility.latitude, facility.longitude], 13);
@@ -1220,8 +1416,233 @@ window.selectFacility = async function (facilityId) {
 window.closeDetail = function () {
   document.getElementById('detail-overlay').classList.remove('open');
   selectedFacilityId = null;
+  selectedFacilityIdx = null;
+  selectedFacilityBins = null;
   geometryLayer.clearLayers();
 };
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+const TIMELINE_MIN_MS = Date.UTC(2017, 0, 1);
+const TIMELINE_MAX_MS = Date.UTC(2023, 11, 16);
+const DAY_MS          = 86400000;
+const TIMELINE_DAYS   = Math.round((TIMELINE_MAX_MS - TIMELINE_MIN_MS) / DAY_MS);
+let currentMs   = TIMELINE_MIN_MS;
+let playing     = false;
+let playTimer   = null;
+const PLAY_STEP_DAYS = 5;
+const PLAY_INTERVAL  = 120;
+
+function fmtDate(ms) {
+  const d = new Date(ms);
+  return d.toISOString().slice(0, 10);
+}
+
+function initTimeline() {
+  const slider = document.getElementById('timeline-slider');
+  slider.min   = 0;
+  slider.max   = TIMELINE_DAYS;
+  slider.value = 0;
+  setCurrentMs(TIMELINE_MIN_MS, false);
+
+  // Render event ticks
+  const ticks = document.getElementById('timeline-ticks');
+  ticks.innerHTML = allEvents.map(e => {
+    const pct = ((e.start_ms - TIMELINE_MIN_MS) / (TIMELINE_MAX_MS - TIMELINE_MIN_MS)) * 100;
+    return `<div class="timeline-tick" style="left:${pct}%" title="${e.facilityName} (${e.signal_type})"></div>`;
+  }).join('');
+
+  slider.addEventListener('input', e => {
+    const days = Number(e.target.value);
+    setCurrentMs(TIMELINE_MIN_MS + days * DAY_MS);
+  });
+
+  document.getElementById('timeline-play').addEventListener('click', togglePlay);
+}
+
+function setCurrentMs(ms, syncSlider = true) {
+  currentMs = Math.max(TIMELINE_MIN_MS, Math.min(TIMELINE_MAX_MS, ms));
+  document.getElementById('timeline-current').textContent = fmtDate(currentMs);
+  if (syncSlider) {
+    document.getElementById('timeline-slider').value = Math.round((currentMs - TIMELINE_MIN_MS) / DAY_MS);
+  }
+  updateAnomalyHighlights();
+  if (selectedFacilityBins) renderDeltaCharts();
+}
+
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('timeline-play').textContent = playing ? '❚❚' : '▶';
+  if (playing) {
+    playTimer = setInterval(() => {
+      if (currentMs >= TIMELINE_MAX_MS) { togglePlay(); return; }
+      setCurrentMs(currentMs + PLAY_STEP_DAYS * DAY_MS);
+    }, PLAY_INTERVAL);
+  } else {
+    clearInterval(playTimer);
+    playTimer = null;
+  }
+}
+
+// ── Anomaly highlights on map ─────────────────────────────────────────────────
+function updateAnomalyHighlights() {
+  anomalyLayer.clearLayers();
+  const active = allEvents.filter(e => e.start_ms <= currentMs && currentMs <= e.end_ms);
+
+  const indicator = document.getElementById('timeline-active');
+  if (active.length === 0) {
+    indicator.textContent = 'No anomalies';
+    indicator.classList.remove('has-anomaly');
+  } else {
+    indicator.textContent = `${active.length} active anomal${active.length === 1 ? 'y' : 'ies'}`;
+    indicator.classList.add('has-anomaly');
+  }
+
+  active.forEach(e => {
+    const icon = L.divIcon({
+      className: 'anomaly-marker',
+      html: `<div class="anomaly-ring"></div>`,
+      iconSize: [40, 40], iconAnchor: [20, 20]
+    });
+    const marker = L.marker([e.latitude, e.longitude], { icon, zIndexOffset: 1000, interactive: false });
+    const peak = e.signal_type === 'ndci' ? e.peak_z_ndci :
+                 e.signal_type === 'turb' ? e.peak_z_turb :
+                 Math.max(Math.abs(e.peak_z_ndci || 0), Math.abs(e.peak_z_turb || 0));
+    marker.bindTooltip(
+      `<strong>${e.facilityName}</strong><br>${e.signal_type.toUpperCase()} anomaly · z=${Math.abs(peak).toFixed(2)}`,
+      { permanent: true, direction: 'top', offset: [0, -16], className: 'anomaly-tooltip' }
+    );
+    anomalyLayer.addLayer(marker);
+  });
+}
+
+// ── Delta distribution histogram ──────────────────────────────────────────────
+let selectedFacilityIdx  = null;
+let selectedFacilityBins = null;
+
+async function loadAndRenderDeltas(facilityIdx) {
+  selectedFacilityIdx  = Number(facilityIdx);
+  selectedFacilityBins = null;
+  // clear svgs while loading
+  document.getElementById('ndci-svg').innerHTML = '';
+  document.getElementById('turb-svg').innerHTML = '';
+  ['ndci-current','turb-current','ndci-date','turb-date','ndci-z','turb-z'].forEach(id =>
+    document.getElementById(id).textContent = '—');
+
+  const res = await conn.query(`
+    SELECT epoch_ms(date) AS ms,
+           delta_ndci, delta_turb,
+           z_delta_ndci, z_delta_turb,
+           valid_bin_ndci, valid_bin_turb,
+           any_anomaly
+    FROM bins
+    WHERE facility_id = ${selectedFacilityIdx}
+    ORDER BY date
+  `);
+  const rows = res.toArray().map(r => {
+    const o = r.toJSON();
+    return { ...o, ms: Number(o.ms) };
+  });
+  selectedFacilityBins = rows;
+  renderDeltaCharts();
+}
+
+function pickCurrentBin(bins) {
+  if (!bins || !bins.length) return null;
+  let best = bins[0], bestDist = Math.abs(best.ms - currentMs);
+  for (const b of bins) {
+    const d = Math.abs(b.ms - currentMs);
+    if (d < bestDist) { best = b; bestDist = d; }
+  }
+  return best;
+}
+
+function renderDeltaCharts() {
+  if (!selectedFacilityBins) return;
+  const bins = selectedFacilityBins;
+  const cur  = pickCurrentBin(bins);
+  renderHistogram('ndci-svg', bins.filter(b => b.valid_bin_ndci).map(b => b.delta_ndci), cur?.delta_ndci, cur?.z_delta_ndci);
+  renderHistogram('turb-svg', bins.filter(b => b.valid_bin_turb).map(b => b.delta_turb), cur?.delta_turb, cur?.z_delta_turb);
+
+  const fmtVal = v => (v == null || !isFinite(v)) ? '—' : (Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(4));
+  const fmtZ   = v => (v == null || !isFinite(v)) ? '—' : `z=${v.toFixed(2)}`;
+  document.getElementById('ndci-current').textContent = fmtVal(cur?.delta_ndci);
+  document.getElementById('turb-current').textContent = fmtVal(cur?.delta_turb);
+  document.getElementById('ndci-date').textContent    = cur ? fmtDate(cur.ms) : '—';
+  document.getElementById('turb-date').textContent    = cur ? fmtDate(cur.ms) : '—';
+  const ndciZ = document.getElementById('ndci-z');
+  const turbZ = document.getElementById('turb-z');
+  ndciZ.textContent = fmtZ(cur?.z_delta_ndci);
+  turbZ.textContent = fmtZ(cur?.z_delta_turb);
+  ndciZ.classList.toggle('anomaly', Math.abs(cur?.z_delta_ndci ?? 0) >= 3);
+  turbZ.classList.toggle('anomaly', Math.abs(cur?.z_delta_turb ?? 0) >= 3);
+}
+
+function renderHistogram(svgId, values, currentVal, currentZ) {
+  const svg = document.getElementById(svgId);
+  svg.innerHTML = '';
+  if (!values || !values.length) {
+    svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#88a9c4" font-size="11">No valid data</text>`;
+    return;
+  }
+  const W = svg.clientWidth || 320, H = svg.clientHeight || 110;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const finite = values.filter(v => isFinite(v));
+  if (!finite.length) return;
+  let min = Math.min(...finite), max = Math.max(...finite);
+  if (min === max) { min -= 0.01; max += 0.01; }
+  const N_BINS = 28;
+  const step   = (max - min) / N_BINS;
+  const counts = new Array(N_BINS).fill(0);
+  finite.forEach(v => {
+    let i = Math.floor((v - min) / step);
+    if (i >= N_BINS) i = N_BINS - 1;
+    if (i < 0) i = 0;
+    counts[i]++;
+  });
+  const maxCnt = Math.max(...counts);
+
+  const barW    = (W - 4) / N_BINS;
+  const padTop  = 6;
+  const usableH = H - padTop - 14; // 14 for axis label
+
+  let curIdx = -1;
+  if (currentVal != null && isFinite(currentVal)) {
+    curIdx = Math.floor((currentVal - min) / step);
+    if (curIdx >= N_BINS) curIdx = N_BINS - 1;
+    if (curIdx < 0)        curIdx = 0;
+  }
+  const isAnomaly = Math.abs(currentZ ?? 0) >= 3;
+  const curColor  = isAnomaly ? '#d31d2c' : '#1e8fd5';
+
+  let bars = '';
+  for (let i = 0; i < N_BINS; i++) {
+    const h = maxCnt ? (counts[i] / maxCnt) * usableH : 0;
+    const x = 2 + i * barW;
+    const y = padTop + (usableH - h);
+    const fill = (i === curIdx) ? curColor : '#9bcaee';
+    bars += `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${(barW - 1).toFixed(2)}" height="${h.toFixed(2)}" fill="${fill}" rx="1.5"/>`;
+  }
+
+  // current value line + label
+  let curMarker = '';
+  if (currentVal != null && isFinite(currentVal)) {
+    const cx = 2 + ((currentVal - min) / (max - min)) * (W - 4);
+    curMarker = `
+      <line x1="${cx.toFixed(2)}" y1="${padTop}" x2="${cx.toFixed(2)}" y2="${padTop + usableH}" stroke="${curColor}" stroke-width="2" stroke-dasharray="2 2"/>
+      <circle cx="${cx.toFixed(2)}" cy="${padTop}" r="3" fill="${curColor}" stroke="#fff" stroke-width="1.5"/>
+    `;
+  }
+
+  // x-axis labels (min, 0 if in range, max)
+  const fmtTick = v => Math.abs(v) < 0.001 ? v.toExponential(1) : v.toFixed(3);
+  const axisLabels = `
+    <text x="2"           y="${H - 2}" font-size="9" fill="#88a9c4" text-anchor="start">${fmtTick(min)}</text>
+    <text x="${W / 2}"    y="${H - 2}" font-size="9" fill="#88a9c4" text-anchor="middle">0</text>
+    <text x="${W - 2}"    y="${H - 2}" font-size="9" fill="#88a9c4" text-anchor="end">${fmtTick(max)}</text>
+  `;
+  svg.innerHTML = bars + curMarker + axisLabels;
+}
 
 // ── Events ────────────────────────────────────────────────────────────────────
 document.getElementById('detail-overlay').addEventListener('click', e => {
@@ -1235,8 +1656,10 @@ document.getElementById('search').addEventListener('keypress', e => {
 map.on('moveend', () => loadFacilities());
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+initTimeline();
 await loadStats();
 await loadFacilities();
+document.getElementById('kpi-alerts').textContent = allEvents.length;
 </script>
 </body>
 </html>
