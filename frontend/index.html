@@ -359,8 +359,8 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
 
 .kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: rgba(255,255,255,0.4); }
 .kpi-cell { padding: 16px 18px; background: linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.35)); }
+.kpi-cell-anomaly { display: flex; align-items: center; justify-content: center; }
 .kpi-num { font-size: 26px; font-weight: 800; color: var(--ink); letter-spacing: -0.02em; line-height: 1; }
-.kpi-num.alert { color: var(--sev-4); }
 .kpi-lbl { font-size: 11px; color: var(--ink-3); margin-top: 4px; font-weight: 600; }
 
 .rail-sect {
@@ -802,7 +802,6 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
           <input type="range" id="timeline-slider" min="0" max="100" value="0" step="1" />
           <div class="timeline-ticks" id="timeline-ticks"></div>
         </div>
-        <div class="timeline-active" id="timeline-active">No anomalies</div>
       </div>
       <div class="map-shell">
         <div class="map-container">
@@ -858,9 +857,8 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
             <div class="kpi-num" id="kpi-facilities">—</div>
             <div class="kpi-lbl">Monitored Facilities</div>
           </div>
-          <div class="kpi-cell">
-            <div class="kpi-num alert" id="kpi-alerts">—</div>
-            <div class="kpi-lbl">Active Alerts</div>
+          <div class="kpi-cell kpi-cell-anomaly">
+            <div class="timeline-active" id="timeline-active">No anomalies</div>
           </div>
           <div class="kpi-cell">
             <div class="kpi-num" id="kpi-rivers">—</div>
@@ -1186,7 +1184,6 @@ async function loadStats() {
   document.getElementById('kpi-facilities').textContent = Number(row.total).toLocaleString();
   document.getElementById('kpi-countries').textContent  = row.n_countries;
   document.getElementById('kpi-rivers').textContent     = '—';
-  document.getElementById('kpi-alerts').textContent     = '12';
 }
 
 // ── Facilities list ───────────────────────────────────────────────────────────
@@ -1659,7 +1656,6 @@ map.on('moveend', () => loadFacilities());
 initTimeline();
 await loadStats();
 await loadFacilities();
-document.getElementById('kpi-alerts').textContent = allEvents.length;
 </script>
 </body>
 </html>
