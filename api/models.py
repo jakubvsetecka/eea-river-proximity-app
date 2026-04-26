@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class FacilityListItem(BaseModel):
     """Lightweight facility for list responses (no geometries)."""
     id: int
+    facility_idx: int | None = None
     facility_name: str = Field(alias="facilityName")
     city: str | None = None
     country_name: str | None = Field(None, alias="countryName")
@@ -15,6 +16,7 @@ class FacilityListItem(BaseModel):
     distance_to_river_m: float | None = None
     n_upstream: int | None = None
     n_downstream: int | None = None
+    has_sentinel_visible_river: bool = False
 
     class Config:
         populate_by_name = True

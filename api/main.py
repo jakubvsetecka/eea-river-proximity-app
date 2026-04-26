@@ -3,11 +3,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
 from .data import init_data_store
-from .routes import facilities, segments, stats, health
+from .routes import facilities, segments, stats, health, events
 
 
 @asynccontextmanager
@@ -15,6 +14,8 @@ async def lifespan(app: FastAPI):
     # Startup: load data
     settings = Settings()
     init_data_store(settings)
+    print(f"Data directory: {settings.data_dir}")
+
     yield
     # Shutdown: nothing to clean up
 
@@ -41,6 +42,7 @@ app.include_router(facilities.router)
 app.include_router(segments.router)
 app.include_router(stats.router)
 app.include_router(health.router)
+app.include_router(events.router)
 
 
 # Frontend path

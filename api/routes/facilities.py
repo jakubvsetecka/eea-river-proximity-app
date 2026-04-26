@@ -112,6 +112,7 @@ def list_facilities(
         row = df.iloc[idx]
         items.append(FacilityListItem(
             id=int(idx),
+            facility_idx=safe_int(row, 'facility_idx') or int(idx),
             facilityName=safe_get(row, 'facilityName', ''),
             city=safe_get(row, 'city'),
             countryName=safe_get(row, 'countryName'),
@@ -122,6 +123,7 @@ def list_facilities(
             distance_to_river_m=safe_float(row, 'distance_to_river_m'),
             n_upstream=safe_int(row, 'n_upstream'),
             n_downstream=safe_int(row, 'n_downstream'),
+            has_sentinel_visible_river=bool(safe_get(row, 'has_sentinel_visible_river', False)),
         ))
 
     return FacilitiesListResponse(

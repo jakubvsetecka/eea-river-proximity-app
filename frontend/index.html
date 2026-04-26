@@ -984,13 +984,9 @@ button { font: inherit; color: inherit; border: none; cursor: pointer; }
 <script src="https://unpkg.com/leaflet-ant-path@1.3.0/dist/leaflet-ant-path.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script type="module">
-import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/+esm';
-
-const HF_BASE       = 'https://huggingface.co/datasets/cassini-team-todo/eea-river-proximity/resolve/main';
-const HF_FACILITIES = `${HF_BASE}/river_data_facilities.geoparquet`;
-const HF_EVENTS     = `${HF_BASE}/facility_anomalies_events.parquet`;
-const HF_BINS       = `${HF_BASE}/facility_anomalies_per_bin.parquet`;
-const HF_CANONICAL  = `${HF_BASE}/facility_canonical_map.parquet`;
+// API-based data loading - no more DuckDB WASM!
+const API_BASE = window.location.origin;
+console.log('🚀 Using API backend:', API_BASE);
 
 const UPSTREAM_COLOR = '#2ca02c';
 const DOWNSTREAM_COLOR = '#d62728';
@@ -1029,95 +1025,54 @@ const detailGeometryLayer = L.layerGroup();
 let allFacilities    = [];
 let selectedFacilityId = null;
 
-// ── DuckDB init ──────────────────────────────────────────────────────────────
-function bootStatus(msg) {
+// ── API-based init ───────────────────────────────────────────────────────────
+const bootStartTime = performance.now();
+
+function bootStatus(msg, detail = '') {
+  const total = ((performance.now() - bootStartTime) / 1000).toFixed(1);
+  console.log(`[${total}s] ${msg}${detail ? ' - ' + detail : ''}`);
+
   document.getElementById('map-loading').classList.add('on');
   document.getElementById('map-loading-text').textContent = msg;
-  document.getElementById('map-loading-count').textContent = '';
+  document.getElementById('map-loading-count').textContent = detail || `${total}s`;
   document.getElementById('fac-list').innerHTML =
-    `<div style="text-align:center;color:var(--ink-3);padding:20px;">${msg}</div>`;
+    `<div style="text-align:center;color:var(--ink-3);padding:20px;">
+      <div style="font-weight:600;margin-bottom:8px;">${msg}</div>
+      <div style="font-size:11px;color:var(--ink-4);">${detail || 'Loading...'}</div>
+    </div>`;
 }
 
-bootStatus('Loading DuckDB…');
-await new Promise(requestAnimationFrame);
+bootStatus('Loading events…', 'Fetching from API');
 
-const bundles  = duckdb.getJsDelivrBundles();
-const bundle   = await duckdb.selectBundle(bundles);
-const workerUrl = URL.createObjectURL(
-  new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
-);
-const worker = new Worker(workerUrl);
-const db     = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
-await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-URL.revokeObjectURL(workerUrl);
+// Load all anomaly events from API
+const eventsResponse = await fetch(`${API_BASE}/events`);
+const eventsData = await eventsResponse.json();
+const allEvents = eventsData.data.map(e => ({
+  ...e,
+  facility_id: e.facility_id,
+  canonical_id: e.canonical_id,
+  start_ms: e.start_date ? new Date(e.start_date).getTime() : null,
+  end_ms: e.end_date ? new Date(e.end_date).getTime() : null,
+}));
+console.log(`✅ Loaded ${allEvents.length} anomaly events from API`);
 
-const conn = await db.connect();
-
-bootStatus('Installing spatial extension…');
-await new Promise(requestAnimationFrame);
-await conn.query('INSTALL spatial; LOAD spatial;');
-
-bootStatus('Reading facilities schema…');
-await new Promise(requestAnimationFrame);
-await conn.query(`CREATE VIEW facilities AS SELECT * FROM read_parquet('${HF_FACILITIES}')`);
-
-bootStatus('Reading anomaly events schema…');
-await new Promise(requestAnimationFrame);
-await conn.query(`CREATE VIEW events AS SELECT * FROM read_parquet('${HF_EVENTS}')`);
-
-bootStatus('Reading bin-level schema…');
-await new Promise(requestAnimationFrame);
-await conn.query(`CREATE VIEW bins AS SELECT * FROM read_parquet('${HF_BINS}')`);
-
-bootStatus('Reading canonical map schema…');
-await new Promise(requestAnimationFrame);
-await conn.query(`CREATE VIEW canonical_map AS SELECT * FROM read_parquet('${HF_CANONICAL}')`);
-
-bootStatus('Loading anomaly events…');
-await new Promise(requestAnimationFrame);
-const eventsRes = await conn.query(`
-  SELECT e.event_id, e.facility_id,
-         epoch_ms(e.start_date) AS start_ms,
-         epoch_ms(e.end_date)   AS end_ms,
-         e.peak_z_ndci, e.peak_z_turb, e.signal_type,
-         f.facilityName, f.countryName, f.city,
-         ST_X(f.geometry) AS longitude,
-         ST_Y(f.geometry) AS latitude
-  FROM events e
-  JOIN facilities f ON e.facility_id = f.facility_idx
-  ORDER BY e.start_date
-`);
-const allEvents = eventsRes.toArray().map(r => {
-  const o = r.toJSON();
-  return {
-    ...o,
-    facility_id: Number(o.facility_id),
-    start_ms: Number(o.start_ms),
-    end_ms: Number(o.end_ms)
-  };
-});
-
-bootStatus('Loading canonical map…');
-await new Promise(requestAnimationFrame);
-// Same physical facility appears under many facility_idx values; the canonical map
-// resolves every raw idx to the single canonical_facility_id used in bins/events.
-const canonRes = await conn.query(`SELECT facility_idx, canonical_facility_id FROM canonical_map`);
+// Build canonical map from events (canonical_id is provided by API)
 const canonicalById = new Map();
-for (const r of canonRes.toArray()) {
-  const o = r.toJSON();
-  canonicalById.set(Number(o.facility_idx), Number(o.canonical_facility_id));
+for (const e of allEvents) {
+  canonicalById.set(e.facility_id, e.canonical_id);
 }
 
 function canonicalFor(f) {
-  const raw = Number(f.facility_idx ?? f.facility_id);
+  const raw = Number(f.facility_idx ?? f.id);
   return canonicalById.get(raw) ?? raw;
 }
 
-// Build event-history map keyed by canonical id (events table sometimes uses raw idxs).
+// Build event-history map keyed by canonical id
+bootStatus('Building event index…');
 const eventsByFacility = new Map();
 for (const e of allEvents) {
-  const cid = canonicalById.get(e.facility_id) ?? e.facility_id;
-  const z   = Math.max(Math.abs(e.peak_z_ndci || 0), Math.abs(e.peak_z_turb || 0));
+  const cid = e.canonical_id;
+  const z = Math.max(Math.abs(e.peak_z_ndci || 0), Math.abs(e.peak_z_turb || 0));
   const cur = eventsByFacility.get(cid);
   if (cur) {
     cur.events.push(e);
@@ -1126,13 +1081,43 @@ for (const e of allEvents) {
     eventsByFacility.set(cid, { events: [e], maxAbsZ: z });
   }
 }
+console.log(`✅ Event index built: ${eventsByFacility.size} facilities with events`);
+
+// Severity data from z-deltas (fetched per date)
+let severityByFacility = {};  // facility_id -> severity (1-5)
+let severityDate = null;
+
+async function fetchSeverity(dateStr) {
+  try {
+    const res = await fetch(`${API_BASE}/events/severity?date=${dateStr}`);
+    const data = await res.json();
+    severityByFacility = data.data || {};
+    severityDate = data.date;
+    console.log(`✅ Loaded severity for ${Object.keys(severityByFacility).length} facilities at ${severityDate}`);
+  } catch (err) {
+    console.warn('Failed to fetch severity:', err);
+  }
+}
+
+// Fetch initial severity for default date
+await fetchSeverity('2017-01-01');
+
+const totalBootTime = ((performance.now() - bootStartTime) / 1000).toFixed(1);
+console.log(`🎉 Boot complete in ${totalBootTime}s!`);
+bootStatus('Ready!', `Loaded in ${totalBootTime}s`);
+setTimeout(() => document.getElementById('map-loading').classList.remove('on'), 500);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function getSeverity(f) {
+  // Use z-delta based severity from API
+  const fid = f.facility_idx || f.id;
+  const sev = severityByFacility[fid];
+  if (sev) return sev;
+
+  // Fallback to event-based severity if no z-delta data
   const cid = canonicalFor(f);
   const ev  = eventsByFacility.get(cid);
-  if (!ev) return 1;                                         // monitored, no events
-  // active right now bumps to critical
+  if (!ev) return 1;
   const active = ev.events.some(e => e.start_ms <= currentMs && currentMs <= e.end_ms);
   if (active) return 5;
   if (ev.maxAbsZ >= 5) return 4;
@@ -1172,17 +1157,15 @@ function addFlowLine(geojson, color, layer) {
 
 // ── Stats ────────────────────────────────────────────────────────────────────
 async function loadStats() {
-  const res = await conn.query(`
-    SELECT COUNT(DISTINCT m.canonical_facility_id) AS monitored,
-           COUNT(DISTINCT f.countryName)           AS n_countries
-    FROM facilities f
-    JOIN canonical_map m ON f.facility_idx = m.facility_idx
-    WHERE f.has_sentinel_visible_river
-  `);
-  const [row] = res.toArray().map(r => r.toJSON());
-  document.getElementById('kpi-facilities').textContent = Number(row.monitored).toLocaleString();
-  document.getElementById('kpi-countries').textContent  = row.n_countries;
-  document.getElementById('kpi-rivers').textContent     = '—';
+  try {
+    const res = await fetch(`${API_BASE}/stats`);
+    const stats = await res.json();
+    document.getElementById('kpi-facilities').textContent = stats.total_facilities.toLocaleString();
+    document.getElementById('kpi-countries').textContent = stats.countries.length;
+    document.getElementById('kpi-rivers').textContent = stats.total_segments?.toLocaleString() || '—';
+  } catch (err) {
+    console.error('Failed to load stats:', err);
+  }
 }
 
 // ── Facilities list ───────────────────────────────────────────────────────────
@@ -1256,78 +1239,67 @@ async function loadFacilities(panToResults = false) {
   const searchChip = document.getElementById('search-chip');
   const facTitle   = document.getElementById('fac-title');
 
-  let whereClause;
+  // Build API query params
+  const params = new URLSearchParams({ page_size: '500' });
+
   if (searchTerm) {
-    const s = searchTerm.replace(/'/g, "''");
-    whereClause = `WHERE facilityName ILIKE '%${s}%'
-                      OR city         ILIKE '%${s}%'
-                      OR countryName  ILIKE '%${s}%'`;
+    params.set('search', searchTerm);
     currentSearch = searchTerm;
     searchChip.style.display = 'flex';
     document.getElementById('search-chip-text').textContent = `Search: "${searchTerm}"`;
     facTitle.textContent = 'Search Results';
   } else {
-    const w = bounds.getWest(), e = bounds.getEast();
-    const s = bounds.getSouth(), n = bounds.getNorth();
-    whereClause = `WHERE ST_X(geometry) BETWEEN ${w} AND ${e}
-                     AND ST_Y(geometry) BETWEEN ${s} AND ${n}`;
+    const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+    params.set('bbox', bbox);
     currentSearch = '';
     searchChip.style.display = 'none';
     facTitle.textContent = 'Facilities in View';
   }
 
-  setLoading(true, 'Streaming facilities', 0);
-  await new Promise(requestAnimationFrame);
-
-  const reader = await conn.send(`
-    SELECT facility_idx, facilityName, city, countryName, EPRTR_SectorName,
-           n_upstream, n_downstream, closest_river_id, distance_to_river_m,
-           has_sentinel_visible_river,
-           ST_X(geometry) AS longitude,
-           ST_Y(geometry) AS latitude
-    FROM facilities
-    ${whereClause}
-    LIMIT 500
-  `);
-
-  const seen          = new Map();
-  const newFacilities = [];
-  const markerBounds  = L.latLngBounds();
-  let firstBatch      = true;
+  setLoading(true, 'Loading facilities…', 0);
 
   try {
-    for await (const batch of reader) {
-      if (queryId !== activeQueryId) return;
+    const res = await fetch(`${API_BASE}/facilities?${params}`);
+    if (queryId !== activeQueryId) return;
 
-      if (firstBatch) {
-        facilitiesLayer.clearLayers();
-        firstBatch = false;
+    const data = await res.json();
+    const rows = data.data || [];
+
+    facilitiesLayer.clearLayers();
+    const seen = new Map();
+    const newFacilities = [];
+    const markerBounds = L.latLngBounds();
+    const markers = [];
+
+    for (const row of rows) {
+      const key = `${row.facility_name}|${(row.latitude ?? 0).toFixed(4)}|${(row.longitude ?? 0).toFixed(4)}`;
+      if (seen.has(key)) continue;
+      seen.set(key, true);
+
+      // Map API response to expected format (API uses camelCase aliases)
+      const f = {
+        id: row.id,
+        facility_idx: row.facility_idx || row.id,
+        facilityName: row.facilityName,
+        city: row.city,
+        countryName: row.countryName,
+        EPRTR_SectorName: row.EPRTR_SectorName,
+        longitude: row.longitude,
+        latitude: row.latitude,
+        n_upstream: row.n_upstream,
+        n_downstream: row.n_downstream,
+        has_sentinel_visible_river: row.has_sentinel_visible_river,
+      };
+      newFacilities.push(f);
+      const marker = buildFacilityMarker(f);
+      if (marker) {
+        markers.push(marker);
+        markerBounds.extend([f.latitude, f.longitude]);
       }
-
-      const rows = batch.toArray().map(r => r.toJSON());
-      const batchMarkers = [];
-      for (const row of rows) {
-        const key = `${row.facilityName}|${(row.latitude ?? 0).toFixed(4)}|${(row.longitude ?? 0).toFixed(4)}`;
-        if (seen.has(key)) continue;
-        seen.set(key, true);
-
-        const f = { ...row, id: newFacilities.length };
-        newFacilities.push(f);
-        const marker = buildFacilityMarker(f);
-        if (marker) {
-          batchMarkers.push(marker);
-          markerBounds.extend([f.latitude, f.longitude]);
-        }
-      }
-      if (batchMarkers.length) facilitiesLayer.addLayers(batchMarkers);
-
-      document.getElementById('fac-count').textContent = newFacilities.length;
-      setLoading(true, 'Streaming facilities', newFacilities.length);
-      await new Promise(requestAnimationFrame);
     }
 
-    if (queryId !== activeQueryId) return;
-    if (firstBatch) facilitiesLayer.clearLayers();
+    facilitiesLayer.addLayers(markers);
+    document.getElementById('fac-count').textContent = newFacilities.length;
 
     allFacilities = newFacilities;
     renderFacilityList();
@@ -1335,6 +1307,8 @@ async function loadFacilities(panToResults = false) {
     if (panToResults && newFacilities.length > 0 && markerBounds.isValid()) {
       map.fitBounds(markerBounds, { padding: [50, 50], maxZoom: 12 });
     }
+  } catch (err) {
+    console.error('Failed to load facilities:', err);
   } finally {
     if (queryId === activeQueryId) setLoading(false);
   }
@@ -1345,22 +1319,29 @@ window.selectFacility = async function (facilityId) {
   selectedFacilityId = facilityId;
   geometryLayer.clearLayers();
 
-  const f = allFacilities[facilityId];
+  const f = allFacilities.find(fac => fac.id === facilityId);
   if (!f) return;
 
-  const name = (f.facilityName || '').replace(/'/g, "''");
-  const geoRes = await conn.query(`
-    SELECT Pollutant, Releases, river_strahler, river_discharge,
-           ST_AsGeoJSON(ST_GeomFromWKB(upstream_poly_wkb))   AS upstream_poly,
-           ST_AsGeoJSON(ST_GeomFromWKB(downstream_poly_wkb)) AS downstream_poly,
-           ST_AsGeoJSON(ST_GeomFromWKB(upstream_line_wkb))   AS upstream_line,
-           ST_AsGeoJSON(ST_GeomFromWKB(downstream_line_wkb)) AS downstream_line
-    FROM facilities
-    WHERE facilityName = '${name}'
-    LIMIT 1
-  `);
-  const [geo] = geoRes.toArray().map(r => r.toJSON());
-  const facility = { ...f, ...(geo || {}) };
+  // Fetch full facility detail from API
+  const res = await fetch(`${API_BASE}/facilities/${f.id}`);
+  const detail = await res.json();
+
+  const facility = {
+    ...f,
+    // Override with detail data (API uses camelCase aliases)
+    facilityName: detail.facilityName || f.facilityName,
+    city: detail.city || f.city,
+    countryName: detail.countryName || f.countryName,
+    EPRTR_SectorName: detail.EPRTR_SectorName || f.EPRTR_SectorName,
+    Pollutant: detail.Pollutant,
+    Releases: detail.Releases,
+    river_strahler: detail.river_strahler,
+    river_discharge: detail.river_discharge,
+    upstream_poly: detail.upstream_poly,
+    downstream_poly: detail.downstream_poly,
+    upstream_line: detail.upstream_line,
+    downstream_line: detail.downstream_line,
+  };
   const sev = getSeverity(facility);
 
   document.getElementById('detail-name').textContent        = facility.facilityName;
@@ -1385,10 +1366,11 @@ window.selectFacility = async function (facilityId) {
   }
   detailGeometryLayer.clearLayers();
 
-  const upPoly   = parseGeoJSON(geo?.upstream_poly);
-  const downPoly = parseGeoJSON(geo?.downstream_poly);
-  const upLine   = parseGeoJSON(geo?.upstream_line);
-  const downLine = parseGeoJSON(geo?.downstream_line);
+  // Geometries are already GeoJSON objects from API
+  const upPoly   = facility.upstream_poly;
+  const downPoly = facility.downstream_poly;
+  const upLine   = facility.upstream_line;
+  const downLine = facility.downstream_line;
 
   if (upPoly)   L.geoJSON(upPoly,   { style: { color: UPSTREAM_COLOR,   weight: 1, fillColor: UPSTREAM_POLY_COLOR,   fillOpacity: 0.4 } }).addTo(detailGeometryLayer);
   if (downPoly) L.geoJSON(downPoly, { style: { color: DOWNSTREAM_COLOR, weight: 1, fillColor: DOWNSTREAM_POLY_COLOR, fillOpacity: 0.4 } }).addTo(detailGeometryLayer);
@@ -1453,6 +1435,8 @@ function initTimeline() {
   document.getElementById('timeline-play').addEventListener('click', togglePlay);
 }
 
+let severityFetchTimeout = null;
+
 function setCurrentMs(ms, syncSlider = true) {
   currentMs = Math.max(TIMELINE_MIN_MS, Math.min(TIMELINE_MAX_MS, ms));
   document.getElementById('timeline-current').textContent = fmtDate(currentMs);
@@ -1463,7 +1447,26 @@ function setCurrentMs(ms, syncSlider = true) {
   updateKpiAlerts();
   renderRecentAlerts();
   if (selectedFacilityBins) renderDeltaCharts();
-  if (allFacilities.length > 0) renderFacilityList();
+
+  // Debounce severity fetch to avoid spamming API during slider drag
+  clearTimeout(severityFetchTimeout);
+  severityFetchTimeout = setTimeout(async () => {
+    await fetchSeverity(fmtDate(currentMs));
+    refreshFacilityMarkers();
+    if (allFacilities.length > 0) renderFacilityList();
+  }, 150);
+}
+
+// Refresh all facility markers with updated severity colors
+function refreshFacilityMarkers() {
+  if (!allFacilities.length) return;
+  facilitiesLayer.clearLayers();
+  const markers = [];
+  for (const f of allFacilities) {
+    const marker = buildFacilityMarker(f);
+    if (marker) markers.push(marker);
+  }
+  facilitiesLayer.addLayers(markers);
 }
 
 function updateKpiAlerts() {
@@ -1569,22 +1572,26 @@ async function loadAndRenderDeltas(facilityIdx) {
   ['ndci-current','turb-current','ndci-date','turb-date','ndci-z','turb-z'].forEach(id =>
     document.getElementById(id).textContent = '—');
 
-  const res = await conn.query(`
-    SELECT epoch_ms(date) AS ms,
-           delta_ndci, delta_turb,
-           z_delta_ndci, z_delta_turb,
-           valid_bin_ndci, valid_bin_turb,
-           any_anomaly
-    FROM bins
-    WHERE facility_id = ${selectedFacilityIdx}
-    ORDER BY date
-  `);
-  const rows = res.toArray().map(r => {
-    const o = r.toJSON();
-    return { ...o, ms: Number(o.ms) };
-  });
-  selectedFacilityBins = rows;
-  renderDeltaCharts();
+  try {
+    const res = await fetch(`${API_BASE}/events/bins/${selectedFacilityIdx}`);
+    const data = await res.json();
+
+    const rows = (data.data || []).map(b => ({
+      ms: b.date ? new Date(b.date).getTime() : null,
+      delta_ndci: b.delta_ndci,
+      delta_turb: b.delta_turb,
+      z_delta_ndci: b.z_delta_ndci,
+      z_delta_turb: b.z_delta_turb,
+      valid_bin_ndci: b.delta_ndci != null,
+      valid_bin_turb: b.delta_turb != null,
+      any_anomaly: b.any_anomaly,
+    }));
+
+    selectedFacilityBins = rows;
+    renderDeltaCharts();
+  } catch (err) {
+    console.warn('Failed to load bins:', err);
+  }
 }
 
 function pickCurrentBin(bins) {
